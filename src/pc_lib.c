@@ -216,3 +216,71 @@ void pc_lib_set_default_log_level(int level)
 {
     pc__default_log_level = level;
 }
+
+int pc_pipe_create(pc_socket_t p[2])
+{
+    struct sockaddr_in addr = { 0 };
+    int addr_len = 0;
+    pc_socket_t listener = pc_invalid_socket;
+
+    if (!p) {
+        return -1;
+    }
+
+    p[0] = pc_invalid_socket;
+    p[1] = pc_invalid_socket;
+
+
+    if ((listener = socket(AF_INET, SOCK_STREAM, 0)) == pc_invalid_socket) {
+        return -1;
+    }
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
+    addr.sin_port = 0;
+
+    if (bind(listener, (struct sockaddr *)&addr, sizeof(struct sockaddr_in))) {
+        goto fail;
+    }
+
+    if (getsockname(listener, (struct sockaddr *)&addr, &addr_len)) {
+        goto fail;
+    }
+
+    assert(sizeof(struct sockaddr_in) == addr_len);
+
+    if (listen(listener, 1)) {
+        goto fail;
+    }
+
+    if ((p[0] = socket(AF_INET, SOCK_STREAM, 0)) == pc_invalid_socket) {
+        goto fail;
+    }
+
+    if (connect(p[0], (struct sockaddr *)&addr, addr_len)) {
+        goto fail;
+    }
+
+    if ((p[1] = accept(listener, 0, 0)) < 0) {
+        goto fail;
+    }
+
+    pc_close_socket(listener);
+    return 0;
+
+fail:
+    pc_close_socket(listener);
+
+    if (p[0] != pc_invalid_socket) {
+        pc_close_socket(p[0]);
+        p[0] = pc_invalid_socket;
+    }
+
+    if (p[1] != pc_invalid_socket) {
+        pc_close_socket(p[1]);
+        p[1] = pc_invalid_socket;
+    }
+
+    return -1;
+}
+
